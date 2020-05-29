@@ -3,6 +3,7 @@
 #define LOADBMP_IMPLEMENTATION
 
 #include <stdio.h>
+#include <math.h>
 #include "bmpLoader.h"
 #include "helper.h"
 
@@ -22,33 +23,36 @@ inline void gpuAssert(cudaError_t code, const char* file, int line, bool abort =
 		if (abort) exit(code);
 	}
 }
-
-__global__ void convolution(byte_t* pixelMap, char* filter, double k, byte_t* resultMap, int width, int height) {
+typedef unsigned char byte_t;
+__global__ void convolution(byte_t* pixelMap, int* filter, double coef, byte_t* resultMap, int width, int height) {
 	int j = blockIdx.x * blockDim.x + threadIdx.x;
 	int i = blockIdx.y * blockDim.y + threadIdx.y;
-	int z = blockIdx.z * blockDim.z + threadIdx.z;
-	if (i >= width && j >= height)
-		return;
-	// printf("%d %d %d\n", i, j, z);
-	// C[i][j] = A[i][j] + B[i][j];
-	char r[FILTER_SIZE][FILTER_SIZE]; // result block
+    int z = blockIdx.z * blockDim.z + threadIdx.z;
+
+	char r[FILTER_SIZE][FILTER_SIZE]; // temp result block
 	for (int x = -1; x <= 1; x++)
 		for (int y = -1; y <= 1; y++) {
+			if (i == 1 && j == 1 && z == 1) {
+				byte_t f = filter[FILTER_SIZE * (x + 1) + (j + 1)];
+				byte_t m = *(&pixelMap[(i + x) * height + (j + y)] + z);
+				printf("F:%d P:%d *:%lf\n", f, m, coef);
+			}
 			r[x + 1][y + 1] = (i + x > width || i + x < 0 || y + j > height || y + j < 0)
-				? 0
+				? 150
 				: *(&pixelMap[(i + x) * height + (j + y)] + z) * filter[FILTER_SIZE * (x + 1) + (j + 1)];
 		}
 	double sum = 0;
 	for (int x = 0; x < 3; x++)
 		for (int y = 0; y < 3; y++)
 			sum += r[x][y];
-	sum *= k;
-	// printf("%c %d", (byte_t)sum, (int)sum);
-	*(&resultMap[i * height + j] + z) = *(&pixelMap[i * height + j] + z);
+	if (i == 1 && j == 1 && z == 1)
+		printf("sum:%lf coef:%lf __ %lf %u\n", sum, coef, sum * coef, (byte_t)(int)ceil(sum*coef));
+	sum *= coef;
+	*(&resultMap[i * height + j] + z) = (byte_t)((int)ceil(sum));//*(&pixelMap[i * height + j] + z);
 }
 
-double coef[2] = { 1 / 9, 1.0};
-char filters[2][3][3] = {
+double coef[2] = { 1.0 / 9.0, 1.0 };
+int filters[2][3][3] = {
 	{
 		{1,1,1},
 		{1,1,1},
@@ -70,17 +74,17 @@ int main(char** argv, int argc) {
 		return 1;
 	}
 	size = width * height * 3;
-	char* flatFilter = (char*)flattenArray((void**)filters[BoxBlur], 3, 3, sizeof(char));
-
+	//int* flatFilter = (int*)flattenArray((void**)filters[BoxBlur], 3, 3, sizeof(int));
+	int flatFilter[] = { 1,1,1,1,1,1,1,1,1 };
 	byte_t* d_pixelMap, *d_resultMap, *h_resultMap;
-	char* d_filter;
-	gpuErrchk(cudaMalloc((void**)&d_filter, sizeof(char) * 3 * 3));
+	int* d_filter;
+	gpuErrchk(cudaMalloc((void**)&d_filter, sizeof(int) * 3 * 3));
 	gpuErrchk(cudaMalloc((void**)&d_pixelMap, sizeof(byte_t) * size));
 	gpuErrchk(cudaMalloc((void**)&d_resultMap, sizeof(byte_t) * size));
 	//---cpy
 
 	gpuErrchk(cudaMemcpy(d_pixelMap, pixels, size, cudaMemcpyHostToDevice));
-	gpuErrchk(cudaMemcpy(d_filter, flatFilter, sizeof(char) * 3 * 3, cudaMemcpyHostToDevice));
+	gpuErrchk(cudaMemcpy(d_filter, flatFilter, sizeof(int) * 3 * 3, cudaMemcpyHostToDevice));
 	//DO STUFF
 	/*
 	Declare and allocate host and device memory. <
@@ -89,8 +93,8 @@ int main(char** argv, int argc) {
 	Execute one or more kernels. <
 	Transfer results from the device to the host. <
 	*/
+	dim3 numberOfBlocks(width / 5, height / 5);
 	dim3 threadsPerBlock(16, 16, 3);
-	dim3 numberOfBlocks(width / 8, height / 8);
 	convolution <<<numberOfBlocks, threadsPerBlock >>> (d_pixelMap, d_filter, coef[BoxBlur], d_resultMap, width, height);
 
 	gpuErrchk(cudaPeekAtLastError());
@@ -98,12 +102,12 @@ int main(char** argv, int argc) {
 
 	gpuErrchk(cudaMemcpy(h_resultMap, d_resultMap, size, cudaMemcpyDeviceToHost));
 
-	cudaDeviceSynchronize();
+	// cudaDeviceSynchronize();
 	loadbmp_encode_file("lena2.bmp", h_resultMap, width, height, LOADBMP_RGB);
 	
 	free(pixels);
 	free(h_resultMap);
-	free(flatFilter);
+	// free(flatFilter);
 	cudaFree(d_filter);
 	cudaFree(d_resultMap);
 	cudaFree(d_pixelMap);

@@ -71,7 +71,8 @@ void* flattenArray(void** map, const int w, const int h, const size_t elementSiz
 	}
 
 	for (int i = 0; i < w; i++) {
-		memcpy(&arr[i], &map[i], h * elementSize);
+		for (int j = 0; j < h; j++)
+			memcpy(&arr[j * elementSize], &map[i * elementSize + j], elementSize);
 	}
 	return (void*)arr;
 }
