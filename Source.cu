@@ -30,9 +30,9 @@ inline void gpuAssert(cudaError_t code, const char* file, int line, bool abort =
 typedef float byte_t;
 __global__ void convolution(byte_t* pixelMap, int* filter, double coef, byte_t* resultMap, int width, int height, int channels) {
 	// int j = blockIdx.x * blockDim.x + threadIdx.x;
-	//int i = blockIdx.y * blockDim.y + threadIdx.y;
+	// int i = blockIdx.y * blockDim.y + threadIdx.y;
 	 double f[] = {0, -1, 0, -1, 5, -1, 0, -1, 0};
-	//float f[] = {0, 0, 0, 0, 1, 0, 0, 0, 0};
+	// float f[] = {0, 0, 0, 0, 1, 0, 0, 0, 0};
 	// double f[] = {-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,};
 	int col = threadIdx.x + blockIdx.x * blockDim.x;
 	int row = threadIdx.y + blockIdx.y * blockDim.y;
@@ -62,7 +62,7 @@ __global__ void convolution(byte_t* pixelMap, int* filter, double coef, byte_t* 
 				}
 
 			}
-			resultMap[(row * width + col) * channels + k] = (byte_t)((int)accum);
+			resultMap[(row * width + col) * channels + k] = accum;
 		}
 
 	}
@@ -85,13 +85,14 @@ int filters[2][3][3] = {
 int main(char** argv, int argc) {
 	byte_t* pixels = NULL;
 	byte_t* d_pixelMap, * d_resultMap, * h_resultMap;
-	imgsize_t width = 0, height = 0, size = 0;
+	size_t size;
 	auto inputImage = importPPM("lena.ppm");
+	exportPPM("test.ppm", inputImage);
 	auto outputImage = Image_new(inputImage->width, inputImage->height, inputImage->channels);
 
 	pixels = inputImage->data;
 	h_resultMap = outputImage->data;
-	size = width * height * inputImage->channels;
+	size = inputImage->width * inputImage->height * inputImage->channels;
 	//int* flatFilter = (int*)flattenArray((void**)filters[BoxBlur], 3, 3, sizeof(int));
 	int flatFilter[] = { 0,-1,0,-1,5,-1,0,-1,0 };
 	// byte_t* d_pixelMap, *d_resultMap, *h_resultMap;
@@ -111,9 +112,10 @@ int main(char** argv, int argc) {
 	Execute one or more kernels. <
 	Transfer results from the device to the host. <
 	*/
-	dim3 numberOfBlocks(ceil(width / 32), ceil(height / 32));
+	printf("%d %d\n", inputImage->width, inputImage->height);
+	dim3 numberOfBlocks(512 / 32,512 / 32);
 	dim3 threadsPerBlock(32, 32);
-	convolution (d_pixelMap, d_filter, coef[BoxBlur], d_resultMap, width, height, inputImage->channels);
+	convolution <<<numberOfBlocks, threadsPerBlock>>> (d_pixelMap, d_filter, coef[BoxBlur], d_resultMap, inputImage->width, inputImage->height, 3);
 
 	gpuErrchk(cudaPeekAtLastError());
 	h_resultMap = (byte_t*)malloc(sizeof(byte_t) * size);
