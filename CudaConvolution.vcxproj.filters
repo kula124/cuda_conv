@@ -2,6 +2,7 @@
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <CudaCompile Include="kernel.cu" />
+    <CudaCompile Include="Source.cu" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="lib">
@@ -15,9 +16,21 @@
     <ClInclude Include="helper.h">
       <Filter>lib</Filter>
     </ClInclude>
+    <ClInclude Include="ImageHandler.h">
+      <Filter>lib</Filter>
+    </ClInclude>
+    <ClInclude Include="ImageModel.h">
+      <Filter>lib</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="helper.cu">
+      <Filter>lib</Filter>
+    </ClCompile>
+    <ClCompile Include="ImageHandler.cpp">
+      <Filter>lib</Filter>
+    </ClCompile>
+    <ClCompile Include="ImageModel.cpp">
       <Filter>lib</Filter>
     </ClCompile>
   </ItemGroup>

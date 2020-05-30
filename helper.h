@@ -1,4 +1,4 @@
-typedef unsigned char byte_t;
+// typedef unsigned char byte_t;
 typedef unsigned int imgsize_t;
 
 // unsigned char** pixelArrayToPixelMap(unsigned char* arr, const int w, const int h);
