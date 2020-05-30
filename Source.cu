@@ -23,35 +23,48 @@ inline void gpuAssert(cudaError_t code, const char* file, int line, bool abort =
 		if (abort) exit(code);
 	}
 }
+
+// FILE* fp = fopen("./wtf.txt", "w+");
+
 typedef unsigned char byte_t;
-__global__ void convolution(byte_t* pixelMap, int* filter, double coef, byte_t* resultMap, int width, int height) {
+__global__ void convolution(byte_t* pixelMap, int* filter, double coef, byte_t* resultMap, int width, int height, int components) {
 	int j = blockIdx.x * blockDim.x + threadIdx.x;
 	int i = blockIdx.y * blockDim.y + threadIdx.y;
-    int z = blockIdx.z * blockDim.z + threadIdx.z;
 
-	char r[FILTER_SIZE][FILTER_SIZE]; // temp result block
-	for (int x = -1; x <= 1; x++)
-		for (int y = -1; y <= 1; y++) {
-			if (i == 1 && j == 1 && z == 1) {
-				byte_t f = filter[FILTER_SIZE * (x + 1) + (j + 1)];
-				byte_t m = *(&pixelMap[(i + x) * height + (j + y)] + z);
-				printf("F:%d P:%d *:%lf\n", f, m, coef);
+	double f[] = {0, -1, 0, -1, 5, -1, 0, -1, 0};
+	// double f[] = {0, 0, 0, 0, 1, 0, 0, 0, 0};
+	// double f[] = {-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,};
+	if (i >= width || j >= height)
+		return;
+	double sum = 0.0;
+	static int c = 10;
+	for (int z = 0; z < components; z++) {// itterate thru channels
+		for (int x = -(FILTER_SIZE / 2); x <= (FILTER_SIZE / 2); x++) // itterate thru filter rows
+			for (int y = -(FILTER_SIZE / 2); y <= (FILTER_SIZE / 2); y++) { // itterate thru filter cols
+				byte_t pixel = pixelMap[((i + x) * width + (j + y)) * components + z];
+				//byte_t pixel = pixelMap[z * (height * width) + (i + x) * height + (j + y)];
+				double ff = f[(x + 1) * FILTER_SIZE + (y + 1)];
+
+				if (i == 19 && j == 32)
+					printf("PM:%u * f:%lf(%d|%d) = %lf\n",pixel, ff,x,y, ff * pixel);
+				sum += (i + x >= width || i + x < 0 || y + j >= height || y + j < 0)
+					? 0
+					: ff * (int)pixel;
 			}
-			r[x + 1][y + 1] = (i + x > width || i + x < 0 || y + j > height || y + j < 0)
-				? 150
-				: *(&pixelMap[(i + x) * height + (j + y)] + z) * filter[FILTER_SIZE * (x + 1) + (j + 1)];
-		}
-	double sum = 0;
-	for (int x = 0; x < 3; x++)
-		for (int y = 0; y < 3; y++)
-			sum += r[x][y];
-	if (i == 1 && j == 1 && z == 1)
-		printf("sum:%lf coef:%lf __ %lf %u\n", sum, coef, sum * coef, (byte_t)(int)ceil(sum*coef));
-	sum *= coef;
-	*(&resultMap[i * height + j] + z) = (byte_t)((int)ceil(sum));//*(&pixelMap[i * height + j] + z);
+		if (sum <= 0)
+			sum += 125;
+		if (i == 19 && j == 32)
+			printf("sum: %lf| new pixel component: [%u] | oldPixel: [%u]\n", sum, (byte_t)((int)(sum)), pixelMap[(i * width + j) * components + z]);
+		sum *= coef;
+		// resultMap[z * (height * width) + i * height + j] = (byte_t)((int)ceil(sum));
+		resultMap[(i * width + j) * components + z] = (byte_t)((int)ceil(sum));
+		sum = 0.0;
+	}
+	// sum *= coef;
+	// *(&resultMap[i * height + j] + z) = (byte_t)((int)ceil(sum));//*(&pixelMap[i * height + j] + z);
 }
 
-double coef[2] = { 1.0 / 9.0, 1.0 };
+double coef[2] = { 1, 1.0 };
 int filters[2][3][3] = {
 	{
 		{1,1,1},
@@ -75,7 +88,7 @@ int main(char** argv, int argc) {
 	}
 	size = width * height * 3;
 	//int* flatFilter = (int*)flattenArray((void**)filters[BoxBlur], 3, 3, sizeof(int));
-	int flatFilter[] = { 1,1,1,1,1,1,1,1,1 };
+	int flatFilter[] = { 0,-1,0,-1,5,-1,0,-1,0 };
 	byte_t* d_pixelMap, *d_resultMap, *h_resultMap;
 	int* d_filter;
 	gpuErrchk(cudaMalloc((void**)&d_filter, sizeof(int) * 3 * 3));
@@ -93,9 +106,9 @@ int main(char** argv, int argc) {
 	Execute one or more kernels. <
 	Transfer results from the device to the host. <
 	*/
-	dim3 numberOfBlocks(width / 5, height / 5);
-	dim3 threadsPerBlock(16, 16, 3);
-	convolution <<<numberOfBlocks, threadsPerBlock >>> (d_pixelMap, d_filter, coef[BoxBlur], d_resultMap, width, height);
+	dim3 numberOfBlocks(width / 32, height / 32);
+	dim3 threadsPerBlock(32, 32);
+	convolution <<<numberOfBlocks, threadsPerBlock >>> (d_pixelMap, d_filter, coef[BoxBlur], d_resultMap, width, height, LOADBMP_RGB);
 
 	gpuErrchk(cudaPeekAtLastError());
 	h_resultMap = (byte_t*)malloc(sizeof(byte_t) * size);
@@ -108,6 +121,7 @@ int main(char** argv, int argc) {
 	free(pixels);
 	free(h_resultMap);
 	// free(flatFilter);
+	// fclose(fp);
 	cudaFree(d_filter);
 	cudaFree(d_resultMap);
 	cudaFree(d_pixelMap);
