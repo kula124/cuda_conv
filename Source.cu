@@ -25,42 +25,26 @@ inline void gpuAssert(cudaError_t code, const char* file, int line, bool abort =
 	}
 }
 
-__global__ void convolution(float* pixelMap, int* filter, double coef, float* resultMap, int width, int height, int channels) {
-	// int j = blockIdx.x * blockDim.x + threadIdx.x;
-	// int i = blockIdx.y * blockDim.y + threadIdx.y;
-	double f[] = { 0, -1, 0, -1, 5, -1, 0, -1, 0 };
-	// float f[] = {0, 0, 0, 0, 1, 0, 0, 0, 0};
+__global__ void convolution(float* pixelMap, int* filter, double coef, float* resultMap, int width, int height, int components) {
+	int j = blockIdx.x * blockDim.x + threadIdx.x;
+	int i = blockIdx.y * blockDim.y + threadIdx.y;
+
+	float f[] = { 0, -1, 0, -1, 5, -1, 0, -1, 0 };
+	// double f[] = {0, 0, 0, 0, 1, 0, 0, 0, 0};
 	// double f[] = {-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,-0.4,};
-	int col = threadIdx.x + blockIdx.x * blockDim.x;
-	int row = threadIdx.y + blockIdx.y * blockDim.y;
-	int maskRowsRadius = FILTER_SIZE / 2;
-	int maskColsRadius = FILTER_SIZE / 2;
-	float accum;
-
-	for (int k = 0; k < channels; k++) {
-		if (row < height && col < width) {
-			accum = 0;
-			int startRow = row - maskRowsRadius;
-			int startCol = col - maskColsRadius;
-
-			for (int i = 0; i < FILTER_SIZE; i++) {
-
-				for (int j = 0; j < FILTER_SIZE; j++) {
-
-					int currentRow = startRow + i;
-					int currentCol = startCol + j;
-
-					if (currentRow >= 0 && currentRow < height && currentCol >= 0 && currentCol < width) {
-
-						accum += pixelMap[(currentRow * width + currentCol) * channels + k] *
-							f[i * FILTER_SIZE + j];
-					}
-					else accum = 0;
-				}
-
+	if (i >= width || j >= height)
+		return;
+	for (int z = 0; z < components; z++) {// itterate thru channels
+		float sum = 0.0;
+		for (int x = -(FILTER_SIZE / 2); x <= (FILTER_SIZE / 2); x++) // itterate thru filter rows
+			for (int y = -(FILTER_SIZE / 2); y <= (FILTER_SIZE / 2); y++) { // itterate thru filter cols
+				float pixel = pixelMap[((i + x) * width + (j + y)) * components + z];
+				float ff = f[(x + 1) * FILTER_SIZE + (y + 1)];
+				sum += (i + x >= width || i + x < 0 || y + j >= height || y + j < 0)
+					? 0
+					: ff * pixel;
 			}
-			resultMap[(row * width + col) * channels + k] = accum;
-		}
+		resultMap[(i * width + j) * components + z] = sum;
 	}
 }
 
