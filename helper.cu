@@ -6,7 +6,7 @@
 #define BUFFER_SIZE 1024
 #define NAME_BUFFER_SIZE 256
 #define MAX_FILTER_SIZE 20
-#define INITAL_BLOCK_SIZE 4
+#define INITAL_BLOCK_SIZE 5
 
 float* flatenFilter(float** map, const int s)
 {
@@ -19,6 +19,32 @@ float* flatenFilter(float** map, const int s)
 	return arr;
 }
 
+float* sequencialConvolution(float* imageData, float* filter, int imageW, int imageH, int components, const int filterSize) {
+	float* res = (float*)malloc(sizeof(float) * imageW * imageH * components);
+	const int filterRadius = filterSize / 2;
+	for (int i=0; i < imageW; i++)
+		for (int j=0; j < imageH; j++)
+			for (int z = 0; z < components; z++) {
+				float sum = 0.0;
+				for (int x = -filterRadius; x <= filterRadius; x++) // iterate thru filter rows
+					for (int y = -filterRadius; y <= filterRadius; y++) // iterate thru filter cols
+						sum += (i + x >= imageW || i + x < 0 || y + j >= imageH || y + j < 0)
+						? 0 // edge ignore solution
+						: filter[(x + 1) * filterSize + (y + 1)] // filter x pixel[color]
+							* imageData[((i + x) * imageW + (j + y)) * components + z];
+				res[(i * imageH + j) * components + z] = sum;
+			}
+	return res;
+}
+
+int shouldRunSequential()
+{
+	char c;
+	printf("Shuold run sequential? -> ");
+	scanf(" %c", &c);
+	return c == 'y' || c == 'Y';
+}
+
 int showMenu(char** names, int count)
 {
 	puts("CUDA conv");
@@ -28,7 +54,7 @@ int showMenu(char** names, int count)
 	
 	while (pick < 0 || pick >= count) {
 		if (pick != FIRST_RUN)
-			puts("Bad input!");
+			puts("Nemere");
 		for (int i = 0; i < count; i++) {
 			printf("[%d] %s\n", i, names[i]);
 		}
@@ -36,16 +62,6 @@ int showMenu(char** names, int count)
 		scanf("  %d", &pick);
 	}
 	return pick;
-}
-
-int countChar(char* str, int size, char del) {
-	int count = 0;
-	for (int i = 0; i < size; i++) {
-		if (str[i] == '\0' || str[i] == '\n')
-			return count;
-		if (str[i] == del)
-			count++;
-	}
 }
 
 void readFilters(char* file, float**** out_filters, int** out_sizes, char*** out_names, int* count) {
@@ -108,4 +124,10 @@ void readFilters(char* file, float**** out_filters, int** out_sizes, char*** out
 	*(out_sizes) = sizes;
 	*(out_names) = names;
 	*count = counter;
+}
+
+void flushStdinSafe()
+{
+	char c;
+	while ((c = getchar()) != '\n' && c != EOF) {}
 }
