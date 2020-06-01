@@ -50,8 +50,9 @@ int main(char** argv, int argc) {
 	int* filter_sizes, filter_count;
 	int size;
 	readFilters("filters.txt",&filters,&filter_sizes,&filter_names, &filter_count);
-	int pick = 0;
+	int pick = showMenu(filter_names, filter_count);
 	const int FILTER_SIZE = filter_sizes[pick];
+
 	auto inputImage = importPPM("lena.ppm");
 	auto outputImage = Image_new(inputImage->width, inputImage->height, inputImage->channels);
 	size = inputImage->width * inputImage->height * inputImage->channels;

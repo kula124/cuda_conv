@@ -19,6 +19,25 @@ float* flatenFilter(float** map, const int s)
 	return arr;
 }
 
+int showMenu(char** names, int count)
+{
+	puts("CUDA conv");
+	puts("<Lea Mladenic, Dino Miletic, Ivan Kulis>");
+	puts("Odaberite filter:");
+	int pick = FIRST_RUN;
+	
+	while (pick < 0 || pick >= count) {
+		if (pick != FIRST_RUN)
+			puts("Bad input!");
+		for (int i = 0; i < count; i++) {
+			printf("[%d] %s\n", i, names[i]);
+		}
+		printf("Input: ");
+		scanf("  %d", &pick);
+	}
+	return pick;
+}
+
 int countChar(char* str, int size, char del) {
 	int count = 0;
 	for (int i = 0; i < size; i++) {
