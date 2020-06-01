@@ -37,4 +37,7 @@
   <ItemGroup>
     <Image Include="lena.png" />
   </ItemGroup>
+  <ItemGroup>
+    <Text Include="filters.txt" />
+  </ItemGroup>
 </Project>
